@@ -1,0 +1,208 @@
+---
+title: 'Capstone Swiftkey Project: Extrapolatory Analysis'
+author: "Subrata"
+date: "May 21, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tm)
+library(wordcloud)
+library(RWeka)
+```
+
+## Introduction
+
+The analysis below is the first step in the Data Science Specialization, Capstone Project under John Hopkins University. 
+
+The project is about leveraging NLP to develop a predictive model that would predict the next word for the user while typing using a keyboard. This is something similar to the predictive models we are familiar with while typing using our smartphones for messages or for browsing. 
+
+The project uses data from Twitter, Blogs and News websites for developing the predictive model.
+
+The first step in the project is to mine a huge text data base and understand the data structure. Further, we will explore the data to find key characteristics of the data set.
+
+## Loading the data into R
+
+We are leveraging the "tm" package in R to load the datasets in the form of a data corpus.
+
+```{r Loading}
+
+TwitterCorp <- VCorpus(DirSource("./Coursera-SwiftKey/final/en_US - twitter/", encoding = "UTF-8"), readerControl = 
+                  list(language = "eng"))
+Blog <- VCorpus(DirSource("./Coursera-SwiftKey/final/en_US - blog/", encoding = "UTF-8"), readerControl = 
+                  list(language = "eng"))
+News <- VCorpus(DirSource("./Coursera-SwiftKey/final/en_US - news/", encoding = "UTF-8"), readerControl = 
+                  list(language = "eng"))
+
+```
+
+## Inspecting the basic features of the data
+
+Once the data is loaded, we look into three basis features for each of the data set:
+
+1. Database size
+2. Number of lines
+3. Number of words
+
+To count the number of words, we are using a regular expression which counts the number of white spaces between words. This is used as a pseudo method to assess the number of words in the databases.
+
+```{r inspectdata}
+TwitterText<-lapply(TwitterCorp[[1]],as.character)
+TwitterName<-TwitterText$meta[5]
+
+no_lines_twitter<-length(TwitterText$content)
+size_twitter<-format(object.size(TwitterText), units = "Mb")
+Twittercount<-0
+for( i in 1:no_lines_twitter){
+  Twittercount<-Twittercount+length(gregexpr("\\W+",TwitterText$content[i])[[1]]-1)
+}
+
+BlogText<-lapply(Blog[[1]],as.character)
+BlogName<-BlogText$meta[5]
+
+no_lines_blog<-length(BlogText$content)
+size_blog<-format(object.size(BlogText), units = "Mb")
+Blogcount<-0
+for( i in 1:no_lines_blog){
+  Blogcount<-Blogcount+length(gregexpr("\\W+",BlogText$content[i])[[1]]-1)
+}
+
+
+NewsText<-lapply(News[[1]],as.character)
+NewsName<-NewsText$meta[5]
+
+no_lines_news<-length(NewsText$content)
+size_news<-format(object.size(NewsText), units = "Mb")
+Newscount<-0
+for( i in 1:no_lines_news){
+  Newscount<-Newscount+length(gregexpr("\\W+",NewsText$content[i])[[1]]-1)
+}
+
+df<-data.frame(Name=c(TwitterName,BlogName,NewsName),
+               Size=c(size_twitter,size_blog,size_news),
+               LinesCount=c(no_lines_twitter,no_lines_blog,no_lines_news),
+               WordCount=c(Twittercount,Blogcount,Newscount))
+df
+```
+
+## Pre-processing the data 
+
+To preprocess the data, we are using the features provided by the tm package. The following cleaning techniques are applied to the dataset.
+
+1. Remove extra whitespaces
+2. Remove urls/websites
+3. Remove stopwords
+4. Remove words followed by @
+5. Remove numerics
+6. Remove punctuations
+7. Remove non-graphical characters
+8. Convert all to lower cases
+
+Finally, we remove the profane and abusive words from the list by applying a profanity filter. The profane words are from source, [4.5] provided in the references.
+
+```{r dataprocessing}
+# Combine the three corpus
+Twitter<-c(Twitter,Blog,News, recursive=T)
+
+set.seed (12356) # to reproduce the results
+samplingrate <- 0.1 # sampling 10% of the data
+
+
+
+Twitter[[1]]$content<-sample(Twitter[[1]]$content,length(Twitter[[1]]$content)*samplingrate)
+
+Twitter[[2]]$content<-sample(Twitter[[2]]$content,length(Twitter[[2]]$content)*samplingrate)
+
+Twitter[[3]]$content<-sample(Twitter[[3]]$content,length(Twitter[[3]]$content)*samplingrate)
+
+# Remove extra whitespaces
+Twitter<-tm_map(Twitter,stripWhitespace)
+
+# Remove urls
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+Twitter <- tm_map(Twitter, toSpace, "(f|ht)tp(s?)://(.*)[.][a-z]+")
+
+# Remove stopwords
+Twitter <- tm_map(Twitter, removeWords, stopwords("english"))
+
+# Remove words followed by @
+Twitter <- tm_map(Twitter,toSpace,"@[^\\s]+")
+
+# Remove numbers
+Twitter <- tm_map(Twitter, toSpace,"[0-9]")
+
+# Remove punctuations
+Twitter <- tm_map(Twitter, removePunctuation)
+
+# Remove all non graphical characters
+Twitter <- tm_map(Twitter,toSpace,"[^[:graph:]]")
+
+# Convert all to lowercase
+Twitter <- tm_map(Twitter,content_transformer(tolower))
+
+# Remove banned words
+
+bannedwords<-read.csv("./Terms-to-Block.csv",stringsAsFactors = FALSE)
+bannedwords<-bannedwords[4:726,2]
+bannedwords<-gsub(",","",bannedwords)
+
+swearwords<-read.table("./swearWords.txt",stringsAsFactors = FALSE)
+
+AllBannedWords<-unique(unlist(c(swearwords,bannedwords)))
+
+Twitter<-tm_map(Twitter,removeWords,AllBannedWords)
+```
+
+## Exploring the data
+
+Next, we explore each of the datasets using the "wordcloud" package. The following features are explored:
+
+1. How does the word cloud look and what are the prominent words?
+2. Frequency bar plot for the mostly utilized words
+
+```{r dataexploration, warning=FALSE}
+
+TwitterText<-DocumentTermMatrix(VCorpus(VectorSource(Twitter[[1]]$content)))
+TwitterTextNonSparse<-removeSparseTerms(TwitterText,0.99)
+TwitterFreq<-sort(colSums(as.matrix(TwitterTextNonSparse)))
+set.seed(1000)
+wordcloud(names(TwitterFreq),TwitterFreq,min.freq = 3500)
+barplot(height = sort(TwitterFreq,decreasing = TRUE),main = "Word Frequency plot: Twitter")
+head(sort(TwitterFreq,decreasing = TRUE),10)
+
+BlogText<-DocumentTermMatrix(VCorpus(VectorSource(Twitter[[2]]$content)))
+BlogTextNonSparse<-removeSparseTerms(BlogText,0.99)
+BlogFreq<-sort(colSums(as.matrix(BlogTextNonSparse)))
+set.seed(1000)
+wordcloud(names(BlogFreq),BlogFreq,min.freq = 1500)
+barplot(height = sort(BlogFreq,decreasing = TRUE),main = "Word Frequency plot: Blog")
+head(sort(BlogFreq,decreasing = TRUE),10)
+
+NewsText<-DocumentTermMatrix(VCorpus(VectorSource(Twitter[[3]]$content)))
+NewsTextNonSparse<-removeSparseTerms(NewsText,0.99)
+NewsFreq<-sort(colSums(as.matrix(NewsTextNonSparse)))
+set.seed(1000)
+wordcloud(names(NewsFreq),NewsFreq,min.freq = 150)
+barplot(height = sort(NewsFreq,decreasing = TRUE),main = "Word Frequency plot: News")
+head(sort(NewsFreq,decreasing = TRUE),10)
+```
+
+## Conclusion and Next steps
+
+Finally, post the analysis we have a good grasp of the tools for text mining and the dataset is now in a form that can be used for developing the predictive model.
+
+Next steps are:
+
+1. Develop the predictive model
+2. Develop the Shiny app
+3. Deploy the Shiny app
+
+## Reference
+
+1) https://rpubs.com/diegolopezpozueta/40108
+2) http://www.statmethods.net/graphs/bar.html
+3) https://www.google.co.in/url?sa=t&rct=j&q=&esrc=s&source=web&cd=1&cad=rja&uact=8&ved=0ahUKEwic_pCN-IzUAhVKO48KHbfsB50QFggnMAA&url=https%3A%2F%2Fcran.r-project.org%2Fweb%2Fpackages%2Ftm%2Fvignettes%2Ftm.pdf&usg=AFQjCNFRvdLjHlL-Ne-1gS2epKqAh1Zppw&sig2=SI9VRE3lf41DBo8K4Mz4Gg
+4) http://www.bannedwordlist.com/lists/swearWords.txt
+5) http://www.frontgatemedia.com/a-list-of-723-bad-words-to-blacklist-and-how-to-use-facebooks-moderation-tool/
+6) https://stat.ethz.ch/R-manual/R-devel/library/base/html/regex.html
