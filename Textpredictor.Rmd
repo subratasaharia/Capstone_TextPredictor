@@ -23,6 +23,8 @@ https://subratasaharia.shinyapps.io/text_predictor/
 
 The github repository for the code is at the following location:
 
+https://github.com/subratasaharia/Capstone_TextPredictor
+
 
 ## Design of the App (1/2)
 
@@ -33,7 +35,7 @@ The following steps summarizes the design of the Application:
 * Build text corpus separately for News, Blogs and Twitter databases. 
 * Sampling rate 5% selected after a few iterations factoring in coverage,memory constraints and size of the corpus. Each corpus built by dividing the   corpus into smaller chunks of 5000 words to tackle memory issues.
 * Each corpus is separately text processed to remove numerics, punctuations,non graphical characters, banned words and converted to smaller caps
-* Token generator function used create N-grams(1-5) for each corpus
+* Token generator function used to create N-grams(1-5) for each corpus
 * N-gram dictionaries created by merging the N-grams from each of the corpuses
 
 ## Design of the App (2/2)
@@ -45,13 +47,13 @@ The following steps summarizes the design of the Application:
 
 * Each of the N-grams used has been enhanced with the frequency count. Based on the frequency count the conditional probability (Maximum Likelihood Estimate) of the Nth word is calculated based on existence of N-1, N-2 string of words upto N-4.
 * Stupid Back off strategy has been implemented to improve accuracy of prediction. In back-off strategy, for a 4 string word, in case the string is not found in the 5 gram model, the algorithm takes the last 3 words of the 4 string and checks for the string in the 4 gram model and keeps going downwards until the string is found. 
-* Similarly, the stupid Back off strategy is useful for predicting the Nth word for any string size. The algorithm picks up the string based on the max N-gram available and keeps going downwards to find the string and predicts the Nth word based on MLE.
+* Similarly, the stupid Back off strategy is useful for predicting the Nth word for any string size. The algorithm picks up the string based on the max N -gram available and keeps going downwards to find the string and predicts the Nth word based on MLE.
 
 ## Functions in the App
 
 * In the app, we have feature to select the number of predicted words to be presented, arranged in decreasing order of MLE.
 * In the app, we also have a feature to either predict the Nth word or to display the entire string that was used to predict the Nth word
-* The app also shows a word cloud for the predicted words and is upper capped to the user selection of the number of predicted words to be shown
+* The app also shows a word cloud for the predicted words/string and is upper capped to the user selection of the number of predicted words to be shown
 
 ```{r, out.width = "500px"}
 knitr::include_graphics("Capture2.PNG")
